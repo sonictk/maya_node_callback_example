@@ -43,7 +43,7 @@ endif(MAKE_MULTITHREADED_BUILD_THREADS)
 
 # Set compiler flags for each platform
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(STATUS "Detected compiler as Clang...")
+    message(STATUS "Setting compiler options for Clang...")
     # Using Clang
     set(CMAKE_CXX_FLAGS "-stdlib=libstdc++ \
                         -std=c++0x \
@@ -63,6 +63,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
                                 -dynamic")
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(STATUS "Setting compiler options for GCC...")
     # using GCC on Linux
     set(CMAKE_C_FLAGS "-DBits64_ \
                       -m64 \
@@ -89,10 +90,11 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
                         -fno-gnu-keywords")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -ggdb -O0")
 
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+elseif(MSVC)
+    message(STATUS "Setting compiler options for MSVC...")
     # using Visual Studio C++
-    set(CMAKE_CXX_FLAGS "/MP /GR /GS /W3 /Gy /Zc:wchar_t /Zc:forScope /Gm /O2 /Ob1 /fp:precise /GF /WX /nologo")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} /ZI /EHsc /Od")
+    set(CMAKE_CXX_FLAGS "/MP /GR /GS /W3 /Gy /Zc:wchar_t /Zc:forScope /Gm /O2 /Ob1 /fp:precise /GF /WX /nologo /openmp")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} /Zi /EHsc /Od")
 endif()
 
 # Don't skip the full RPATH for the build/install tree
