@@ -1,3 +1,7 @@
+/**
+ * @brief 		This is a defintion of a Maya node that demonstrates a method of
+ *				installing callbacks onto the scene during its lifetime.
+ */
 #ifndef CALLBACK_NODE_H
 #define CALLBACK_NODE_H
 
@@ -8,6 +12,7 @@
 #include <maya/MPxNode.h>
 #include <maya/MStatus.h>
 #include <maya/MTypeId.h>
+#include <maya/MCallbackIdArray.h>
 
 
 /// This is a dependency node that will install a callback during its lifetime.
@@ -30,17 +35,23 @@ public:
 	static MStatus initialize();
 
 	/**
-	 * This function is run when the node is evaluated in the dependency graph.
+	 * This function is run when the node is first created. It is responsible for
+	 * setting up all the necessary callbacks.
 	 *
-	 * @param plug 		The plug representing the attribute that needs to be recomputed.
-	 * @param dataBlock	The data block containing storage for the node's attributes.
-	 *
-	 * @return 			The status code.
 	 */
-	virtual MStatus compute(const MPlug &plug, MDataBlock &dataBlock);
+	virtual void postConstructor();
 
 	static const MTypeId kNODE_ID; 	/// The unique ID that identifies this node.
 	static const MString kNODE_NAME;	/// The name of the DG node.
+
+	static const char *kIN_TRANSFORM_ATTR_NAME;
+	static const char *kMSG_CXN_ATTR_NAME;
+	static const char *kTOGGLE_ATTR_NAME;
+
+	static MObject inTransformAttr;
+	static MObject toggleAttr;
+
+	static MCallbackIdArray callbacks;
 };
 
 

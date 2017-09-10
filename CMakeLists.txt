@@ -1,7 +1,7 @@
 # CMake 2.8.11 and above required for linking to qtmain.lib library on Windows
 # CMake 2.8.12 and above required for MACOSX_RPATH property
 cmake_minimum_required(VERSION 2.8.12)
-set(PROJECT_NAME "callbackManager")
+set(PROJECT_NAME "callbackNodeExample")
 # TODO: (sonictk) Make tests
 # set(TEST_EXECUTABLE_NAME "tests_${PROJECT_NAME}")
 
@@ -92,7 +92,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # using Visual Studio C++
     set(CMAKE_CXX_FLAGS "/MP /GR /GS /W3 /Gy /Zc:wchar_t /Zc:forScope /Gm /O2 /Ob1 /fp:precise /GF /WX /nologo")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} /ZI /EHsc /O0")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} /ZI /EHsc /Od")
 endif()
 
 # Don't skip the full RPATH for the build/install tree
