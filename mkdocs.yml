@@ -1,0 +1,4 @@
+site_name: Maya Callback Node Example User Documentation
+theme: cinder
+markdown_extensions:
+    - inline_graphviz
