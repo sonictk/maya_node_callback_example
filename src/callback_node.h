@@ -13,6 +13,35 @@
 #include <maya/MStatus.h>
 #include <maya/MTypeId.h>
 #include <maya/MCallbackIdArray.h>
+#include <maya/MNodeMessage.h>
+
+
+/**
+ * This function checks if a callback node already exists in the current Maya session.
+ *
+ * @return 	``true`` if the node already exists, ``false`` otherwise.
+ */
+bool doesCallbackNodeAlreadyExist();
+
+
+/**
+ * This function will handle cleanup of all callbacks that were installed for the
+ * example feature to work.
+ *
+ * @return		``MStatus::kSuccess`` if the feature was successfully removed.
+ */
+MStatus uninstallCallback();
+
+
+/**
+ * This callback is triggered whenever the callback node is deleted. It is responsible
+ * for handling un-installation of all the callbacks that were initially set up by
+ * this node in the current Maya scene.
+ *
+ * @param node		Ununsed argument.
+ * @param data		Unused argument.
+ */
+void uninstallCallback(MObject &node, void *data);
 
 
 /// This is a dependency node that will install a callback during its lifetime.

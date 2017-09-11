@@ -87,6 +87,11 @@ MStatus ApplyCallbackCommand::redoIt()
 		return MStatus::kInvalidParameter;
 	}
 
+	if (doesCallbackNodeAlreadyExist() == true) {
+		MGlobal::displayError("The feature already exists! You need to delete the existing callback node first!");
+		return MStatus::kFailure;
+	}
+
 	MObject callbackNode = dgMod.createNode(CallbackNode::kNODE_ID, &result);
 	CHECK_MSTATUS_AND_RETURN_IT(result);
 	result = dgMod.doIt();
