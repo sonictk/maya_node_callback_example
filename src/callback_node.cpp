@@ -207,7 +207,6 @@ void CallbackNode::postConstructor()
 	callbacks.append(installId);
 	MNodeMessage::addNodePreRemovalCallback(thisNode,
 											uninstallCallback,
-											//callbacksPtr,
 											NULL,
 											&status);
 	if (status != MStatus::kSuccess) {
