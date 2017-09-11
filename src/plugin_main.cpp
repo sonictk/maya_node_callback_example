@@ -38,6 +38,6 @@ MStatus uninitializePlugin(MObject obj)
 	status = plugin.deregisterCommand(ApplyCallbackCommand::kCOMMAND_NAME);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	// TODO: (sonictk) Need to account for de-registration of callbacks later
+	uninstallCallback();
 	return status;
 }

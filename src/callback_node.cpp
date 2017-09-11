@@ -119,8 +119,10 @@ void installCallback(MNodeMessage::AttributeMessage msg,
 					 MPlug &otherPlug,
 					 void *data)
 {
-	if (msg == (MNodeMessage::kConnectionBroken|MNodeMessage::kIncomingDirection)) {
-		MMessage::removeCallbacks(CallbackNode::callbacks);
+	if (msg == (MNodeMessage::kConnectionBroken|
+				MNodeMessage::kIncomingDirection|
+				MNodeMessage::kOtherPlugSet)) {
+		uninstallCallback();
 	}
 	if (msg != (MNodeMessage::kConnectionMade|
 				MNodeMessage::kIncomingDirection|
@@ -199,11 +201,10 @@ void CallbackNode::postConstructor()
 																	  &status);
 	if (status != MStatus::kSuccess) {
 		MGlobal::displayError("Unable to install example feature!");
-		MMessage::removeCallbacks(callbacks);
+		uninstallCallback();
 		return;
 	}
 	callbacks.append(installId);
-	//MCallbackIdArray *callbacksPtr = &callbacks;
 	MNodeMessage::addNodePreRemovalCallback(thisNode,
 											uninstallCallback,
 											//callbacksPtr,
@@ -211,7 +212,7 @@ void CallbackNode::postConstructor()
 											&status);
 	if (status != MStatus::kSuccess) {
 		MGlobal::displayError("Unable to install example feature!");
-		MMessage::removeCallbacks(callbacks);
+		uninstallCallback();
 		return;
 	}
 }

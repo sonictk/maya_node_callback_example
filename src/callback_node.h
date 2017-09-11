@@ -73,14 +73,14 @@ public:
 	static const MTypeId kNODE_ID; 	/// The unique ID that identifies this node.
 	static const MString kNODE_NAME;	/// The name of the DG node.
 
-	static const char *kIN_TRANSFORM_ATTR_NAME;
-	static const char *kMSG_CXN_ATTR_NAME;
-	static const char *kTOGGLE_ATTR_NAME;
+	static const char *kIN_TRANSFORM_ATTR_NAME;	/// The name of the message connection attribute on the callback node.
+	static const char *kMSG_CXN_ATTR_NAME;			/// The name of the message connection attribute on the transform node.
+	static const char *kTOGGLE_ATTR_NAME;			/// The name of the attribute to toggle the feature.
 
 	static MObject inTransformAttr;
 	static MObject toggleAttr;
 
-	static MCallbackIdArray callbacks;
+	static MCallbackIdArray callbacks; 		/// Storage for the callbacks registered by this node.
 };
 
 
