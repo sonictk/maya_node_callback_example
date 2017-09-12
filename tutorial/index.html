@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">   
+    <link rel="shortcut icon" href="../img/favicon.ico">
+
+    <title>Tutorial - Maya Callback Node Example Tutorial</title>
+
+    <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/font-hack/2.018/css/hack.min.css">
+    <link href='//fonts.googleapis.com/css?family=PT+Sans:400,400italic,700,700italic&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href='//fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,700italic,400,300,600,700&subset=latin-ext,latin' rel='stylesheet' type='text/css'>
+    <link href="../css/base.css" rel="stylesheet">
+    <link href="../css/cinder.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/highlight.css">
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.3.0/respond.min.js"></script>
+        <![endif]-->
+
+    <script src="https://ajax.googleapis.com/ajax/libs/webfont/1.5.18/webfont.js"></script>
+    <script>
+    WebFont.load({
+        google: {
+            families: ['Open Sans', 'PT Sans']
+        }
+    });
+    </script>
+
+    
+</head>
+
+<body>
+
+    <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+    <div class="container">
+
+        <!-- Collapsed navigation -->
+        <div class="navbar-header">
+            
+
+            <!-- Main title -->
+            <a class="navbar-brand" href="./">Maya Callback Node Example Tutorial</a>
+        </div>
+
+        <!-- Expanded navigation -->
+        <div class="navbar-collapse collapse">
+            
+
+            <ul class="nav navbar-nav navbar-right">
+                <li>
+                    <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                        <i class="fa fa-search"></i> Search
+                    </a>
+                </li>
+                
+                
+            </ul>
+        </div>
+    </div>
+</div>
+
+    <div class="container">
+        
+        <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+    
+        <li class="first-level active"><a href="#tutorial">Tutorial</a></li>
+        
+            <li class="second-level"><a href="#about">About</a></li>
+            
+                <li class="third-level"><a href="#why-not-just-do-what-raffaele-does-and-use-a-scriptnode">Why not just do what Raffaele does and use a scriptNode?</a></li>
+            
+        
+            <li class="second-level"><a href="#requirements">Requirements</a></li>
+            
+                <li class="third-level"><a href="#what-you-should-know">What you should know</a></li>
+            
+        
+            <li class="second-level"><a href="#getting-started">Getting started</a></li>
+            
+                <li class="third-level"><a href="#what-are-we-even-doing">What are we even doing?</a></li>
+            
+                <li class="third-level"><a href="#creating-the-message-attribute">Creating the message attribute</a></li>
+            
+                <li class="third-level"><a href="#writing-the-mpxcommand-to-setup-everything">Writing the MPxCommand to setup everything</a></li>
+            
+        
+            <li class="second-level"><a href="#getting-somewhere">Getting somewhere</a></li>
+            
+                <li class="third-level"><a href="#a-more-detailed-overview-of-the-entire-setup">A more detailed overview of the entire setup</a></li>
+            
+                <li class="third-level"><a href="#registering-the-callback-onto-the-transform-node">Registering the callback onto the transform node</a></li>
+            
+                <li class="third-level"><a href="#getting-our-spiral-behavior-working">Getting our spiral behavior working</a></li>
+            
+        
+            <li class="second-level"><a href="#conclusion">Conclusion</a></li>
+            
+        
+    
+    </ul>
+</div></div>
+        <div class="col-md-9" role="main">
+
+<h1 id="tutorial">Tutorial</h1>
+<h2 id="about">About</h2>
+<p>This is a tutorial on how to write a node that sets up features in your Maya
+scene without having explicit dirty propagation relationships in the dependency graph.</p>
+<p>For this node, we're going to focus mostly on the <em>how</em> of writing the node
+itself, and thus the actual functionality will be restricted to something very
+basic; in this case, creating a spiral motion when a user moves the transform
+node in the scene that we set up the feature for.</p>
+<p>For more information on this approach to setting up scene features, please refer
+to <em>Raffaele Fragapane's</em> <a href="http:// www.cultofrig.com/2017/07/22/
+pilot-season-day -16-automatically-loading-callbacks- scene-load/">Cult Of Rig</a> series on the
+reasoning behind this approach. </p>
+<h3 id="why-not-just-do-what-raffaele-does-and-use-a-scriptnode">Why not just do what Raffaele does and use a <code>scriptNode</code>?</h3>
+<p>The reason we're using a compiled node here instead of a <code>scriptNode</code> as he
+details in the original approach is due to the fact that the script executed
+from a script node in Maya has no concept of which node executed it, and thus
+makes it very difficult to implement in production when you reference this
+script node in a separate namespace without implementing a callback manager of
+some sort to manage the callbacks you are installing into the scene, along with
+managing the associated namespaces/nodes for each of those callbacks registered
+by the script node.</p>
+<p>By using a compiled node instead, we can manage all of that registration/
+un-registration mess within the node itself much more cleanly and reason about
+the state of our Maya scene a lot more easily than a script node would otherwise
+have allowed for.</p>
+<h2 id="requirements">Requirements</h2>
+<h3 id="what-you-should-know">What you should know</h3>
+<ul>
+<li><strong>Basic knowledge of C/C++</strong>. I will focus on including only the code that is
+  important; I expect you to be able to understand how to fill in the rest as needed.</li>
+<li>Knowledge of how the dependency graph works in Maya and how dirty propagation works.</li>
+<li><strong>Basic knowledge of how Maya plugins work and how to write/build them</strong>. There is
+  a sample <code>CMakeLists.txt</code> build script provided for reference if you need a
+  refresher on that.</li>
+<li>If you're unfamilar with Maya's callback mechanisms, to <strong>watch the stream</strong>
+  listed above to get an idea of what's going on and how they tie to dirty
+  propagation in the dependency graph.</li>
+<li>Most importantly: <strong>How to convert between tabs/spaces.</strong> (Of course, you
+  should also prefer tabs, but this is a well-understood <em>fact</em>, and so I don't
+  think further discussion is required on the topic.)</li>
+</ul>
+<h2 id="getting-started">Getting started</h2>
+<p>Firstly, we'll just get a basic skeleton setup of the plugin going. As a refresher,
+this just means that you need to create a defintion of a <code>MPxNode</code>
+that implements a creator function and an initializer function, which
+we will call <code>creator()</code> and <code>initialize()</code> respectively.</p>
+<p>Thus, in <code>callback_node.h</code>:</p>
+<pre><code class="c++">/// This is a dependency node that will install a callback during its lifetime.
+class CallbackNode : MPxNode
+{
+public:
+    static void *creator();
+
+    static MStatus initialize();
+
+    static const MTypeId kNODE_ID;      /// The unique ID that identifies this node.
+    static const MString kNODE_NAME;    /// The name of the DG node.
+</code></pre>
+
+<p>And <code>callback_node.cpp</code>, which, for now, looks pretty sparse:</p>
+<pre><code class="c++">#include &quot;callback_node.h&quot;
+
+const MTypeId CallbackNode::kNODE_ID(0x0007ffff);
+const MString CallbackNode::kNODE_NAME = &quot;callbackNodeExample&quot;;
+
+
+void *CallbackNode::creator()
+{
+    return new CallbackNode();
+}
+
+
+MStatus CallbackNode::initialize()
+{
+    MStatus result;
+    return result;
+}
+</code></pre>
+
+<p>We also add two extra attributes called <code>kNODE_ID</code> and <code>kNODE_NAME</code> to help
+us identify the dependency node later on.</p>
+<p>Great! We've got our node now, let's write the basic plugin structure to
+register it. In case you needed a refresher:</p>
+<p>In <code>plugin_main.cpp</code>:</p>
+<pre><code class="c++">#include &quot;plugin_main.h&quot;
+#include &lt;maya/MFnPlugin.h&gt;
+
+const char *kAUTHOR = &quot;Me, the author&quot;;
+const char *kVERSION = &quot;1.0.0&quot;;
+const char *kREQUIRED_API_VERSION = &quot;Any&quot;;
+
+
+MStatus initializePlugin(MObject obj)
+{
+    MStatus status;
+    MFnPlugin plugin(obj, kAUTHOR, kVERSION, kREQUIRED_API_VERSION);
+
+    status = plugin.registerNode(CallbackNode::kNODE_NAME,
+                                 CallbackNode::kNODE_ID,
+                                 &amp;CallbackNode::creator,
+                                 &amp;CallbackNode::initialize,
+                                 MPxNode::kDependNode);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    return status;
+}
+
+
+MStatus uninitializePlugin(MObject obj)
+{
+    MFnPlugin plugin(obj);
+
+    MStatus status;
+    status =  plugin.deregisterNode(CallbackNode::kNODE_ID);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    return status;
+}
+</code></pre>
+
+<p>In <code>plugin_main.h</code>, I go ahead and setup a <a href="https://stackoverflow.com/questions/543697/include-all-cpp-
+files-into-a-single-compilation-unit">Single Translation Unit (STU)
+Build/Unity build</a> (which is easy, since there's only one
+source file right now): </p>
+<pre><code class="c++">#include &quot;callback_node.cpp&quot;
+
+MStatus initializePlugin(MObject obj);
+
+MStatus uninitializePlugin(MObject obj);
+</code></pre>
+
+<p>You should be able to call the compiler command on your corresponding platform
+on just <code>plugin_main.cpp</code> and have the plugin compile correctly.</p>
+<p><em>I will not go into the details regarding a STU build here, but suffice to say
+that I have found them much more beneficial to build times than any other
+compiler feature (LTO, IncrediBuild, splitting the code out into pre-compiled
+libs, whatever). For such a small project, it doesn't matter; you can switch back
+to a more traditional build setup if you prefer.</em></p>
+<p><em>If you have issues building the plugin on your own, please refer to the
+included <code>CMakeLists.txt</code> to see how I manage my own builds. You are not
+required to use CMake; it is just my own preference.</em></p>
+<p>If you got past all that and got a plugin building, great! We have a node that
+does...well, <em>nothing</em>.</p>
+<p>Now we just need to make it work.</p>
+<h3 id="what-are-we-even-doing">What are we even doing?</h3>
+<p>So before we jump into the node's features itself, let's take a step back and
+think about what we want this node to do at a high-level:</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="325pt" height="127pt"
+ viewBox="0.00 0.00 325.35 127.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 123)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-123 321.353,-123 321.353,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<ellipse fill="none" stroke="black" cx="101.353" cy="-101" rx="76.8869" ry="18"/>
+<text text-anchor="middle" x="101.353" y="-97.3" font-family="Arial" font-size="14.00">Transform node</text>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<polygon fill="none" stroke="black" points="154.853,-36 47.8528,-36 47.8528,-0 154.853,-0 154.853,-36"/>
+<text text-anchor="middle" x="101.353" y="-14.3" font-family="Arial" font-size="14.00">Callback node</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform&#45;&gt;callback</title>
+<path fill="none" stroke="black" d="M39.7786,-90.2176C25.9326,-85.0186 12.8413,-77.0871 4.35277,-65 -8.56463,-46.6065 12.2129,-35.3346 37.8064,-28.5563"/>
+<polygon fill="black" stroke="black" points="38.8769,-31.8992 47.791,-26.173 37.2517,-25.0905 38.8769,-31.8992"/>
+<text text-anchor="middle" x="50.3528" y="-57" font-family="Arial" font-size="10.00"> &#160;&#160;&#160;1. Read translateX</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback&#45;&gt;transform</title>
+<path fill="none" stroke="red" stroke-dasharray="5,2" d="M107.43,-36.3851C109.74,-44.9561 111.558,-55.4737 110.353,-65 110.029,-67.5598 109.577,-70.2004 109.046,-72.8298"/>
+<polygon fill="red" stroke="red" points="105.602,-72.1841 106.714,-82.7204 112.416,-73.7905 105.602,-72.1841"/>
+<text text-anchor="middle" x="213.853" y="-57" font-family="Arial" font-size="10.00"> &#160;&#160;&#160;2. Set new translate Y/Z in a spiral&#45;ly fashion</text>
+</g>
+</g>
+</svg>
+
+<p>Ok. So we know that we want to our node read the translate information from the 
+transform node. However, I just promised that we wouldn't have explicit
+connections between our nodes in the DG. So what we'll do instead is use
+<em>message attributes</em> to do the job of making sure our nodes know about each
+other. Kind of like Tinder, but just for DG nodes.</p>
+<h3 id="creating-the-message-attribute">Creating the message attribute</h3>
+<p>If you need a refresher on what a message attribute is:</p>
+<blockquote>
+<p><strong>A message attribute is a dependency node attribute that does not transmit
+data</strong>. <em>Message attributes only exist to formally declare relationships between
+nodes. By connecting two nodes via message attributes, a relationship between
+those nodes is expressed.</em></p>
+<p><em>The Maya Documentation for <code>MFnMessageAttribute</code>, verse 2:0</em></p>
+</blockquote>
+<p>Basically, by utilizing this Maya feature, we'll be able to avoid having any data
+transmitted explicitly in the graph; we'll be reading it directly from the
+transform node itself.</p>
+<p>Let's add this message attribute to our custom node definition:</p>
+<pre><code class="c++">const char *CallbackNode::kIN_TRANSFORM_ATTR_NAME = &quot;transform&quot;;
+MObject CallbackNode::inTransformAttr;
+
+
+MStatus CallbackNode::initialize()
+{
+    MStatus result;
+
+    MFnMessageAttribute fnMsgAttr;
+    inTransformAttr = fnMsgAttr.create(CallbackNode::kIN_TRANSFORM_ATTR_NAME,
+                                       CallbackNode::kIN_TRANSFORM_ATTR_NAME,
+                                       &amp;result);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+
+    addAttribute(inTransformAttr);
+    return result;
+}
+</code></pre>
+
+<p>However, let's not forget that this attribute needs to be connected to
+something. In this case, that something is the transform node that we're going
+to be moving around. </p>
+<h3 id="writing-the-mpxcommand-to-setup-everything">Writing the <code>MPxCommand</code> to setup everything</h3>
+<p>To make things easier for our end-users, let's make a <code>MPxCommand</code> that they 
+can run in order to create our node automatically, along with handling the connections 
+between it and the transform node. If you've never written such a thing before
+or need some reference, the command I've written is below:</p>
+<p><code>apply_callback_command.h</code></p>
+<pre><code class="c++">class ApplyCallbackCommand : public MPxCommand
+{
+public:
+    static void *creator();
+
+    MStatus doIt(const MArgList &amp;args);
+
+    MStatus redoIt();
+
+    MStatus undoIt();
+
+    bool isUndoable() const;
+
+    static MSyntax newSyntax();
+
+    /// The name of the command that is meant to be run.
+    static const MString kCOMMAND_NAME;
+
+    MStatus parseArgs(const MArgList &amp;args);
+
+    /// Storage for the flag arguments that will be passed into the command.
+    bool flagHelpSpecified = false;
+    MSelectionList flagSelList;
+
+    /// Storage for the operations that this command performs on the DG so that we
+    /// can undo them if necessary.
+    MDGModifier dgMod;
+};
+</code></pre>
+
+<p>And <code>apply_callback_command.cpp</code>:</p>
+<pre><code class="c++">
+const char *flagSelListLongName = &quot;-node&quot;;
+const char *flagSelListShortName = &quot;-n&quot;;
+
+const char *flagHelpLongName = &quot;-help&quot;;
+const char *flagHelpShortName = &quot;-h&quot;;
+
+const char *helpText = &quot;This command will setup a callback on a given node.\n&quot;
+    &quot;Usage:\n   applyCallback [options]\n&quot;
+    &quot;Options:\n&quot;
+    &quot;-h / -help     Prints this message.\n\n&quot;
+    &quot;-n / -node     The name of the node to setup the callback example for.\n\n&quot;;
+
+const MString ApplyCallbackCommand::kCOMMAND_NAME = &quot;applyCallback&quot;;
+
+
+void *ApplyCallbackCommand::creator()
+{
+    return new ApplyCallbackCommand();
+}
+
+
+MSyntax ApplyCallbackCommand::newSyntax()
+{
+    MSyntax syntax;
+    syntax.addFlag(flagHelpShortName, flagHelpLongName);
+    syntax.addFlag(flagSelListShortName, flagSelListLongName, MSyntax::kSelectionItem);
+    syntax.enableQuery(false);
+    syntax.enableEdit(false);
+    syntax.useSelectionAsDefault(true);
+
+    return syntax;
+}
+
+
+MStatus ApplyCallbackCommand::parseArgs(const MArgList &amp;args)
+{
+    MStatus result;
+    MArgDatabase argDb(syntax(), args, &amp;result);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+
+    if (argDb.isFlagSet(flagHelpShortName)) {
+        displayInfo(helpText);
+        flagHelpSpecified = true;
+        return MStatus::kSuccess;
+    } else {
+        flagHelpSpecified = false;
+    }
+
+    if (argDb.isFlagSet(flagSelListShortName)) {
+        argDb.getFlagArgument(flagSelListShortName, 0, flagSelList);
+    }
+
+    return result;
+}
+
+
+MStatus ApplyCallbackCommand::doIt(const MArgList &amp;args)
+{
+    setCommandString(ApplyCallbackCommand::kCOMMAND_NAME);
+    clearResult();
+
+    MStatus result = parseArgs(args);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+
+    if (this-&gt;flagHelpSpecified == true) {
+        return MStatus::kSuccess;
+    }
+
+    return redoIt();
+}
+
+
+MStatus ApplyCallbackCommand::redoIt()
+{
+    MStatus result;
+    if (flagSelList.length() != 1) {
+        MGlobal::displayError(&quot;You need to select a single node to apply the callback to!&quot;);
+        return MStatus::kInvalidParameter;
+    }
+
+    if (doesCallbackNodeAlreadyExist() == true) {
+        MGlobal::displayError(&quot;The feature already exists!&quot;);
+        return MStatus::kFailure;
+    }
+
+    MObject callbackNode = dgMod.createNode(CallbackNode::kNODE_ID, &amp;result);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    result = dgMod.doIt();
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+
+    MFnDependencyNode fnNode(callbackNode);
+    MPlug callbackNodeMsgPlug = fnNode.findPlug(CallbackNode::kIN_TRANSFORM_ATTR_NAME,
+                                                false,
+                                                &amp;result);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+
+    MObject transform;
+    result = flagSelList.getDependNode(0, transform);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    if (!transform.hasFn(MFn::kDependencyNode)) {
+        MGlobal::displayError(&quot;The object specified is not a valid DG node!&quot;);
+        return MStatus::kInvalidParameter;
+    }
+
+    return result;
+}
+
+
+MStatus ApplyCallbackCommand::undoIt()
+{
+    dgMod.undoIt();
+    return MStatus::kSuccess;
+}
+
+
+bool ApplyCallbackCommand::isUndoable() const
+{
+    if (flagHelpSpecified == true) {
+        return false;
+    } else {
+        return true;
+    }
+}
+</code></pre>
+
+<p>It's a bit of boilerplate code to write, but it's not that complicated when you
+see what it's actually doing. We basically create a new <code>CallbackNode</code>, 
+accept a single transform as a command argument, and do some basic sanity
+checking of the inputs to make sure everything's good. Nothing special, really. </p>
+<p><em>(Again, if something here doesn't make sense to you, please look through some of
+the examples of how to write command plugins in the Maya documentation.)</em></p>
+<p>There's one thing we need to do before we call this command good, though; we
+need to actually make the connection between the callback node and the transform
+node that we pass to the command:</p>
+<pre><code class="c++">    //... the earlier part of redoIt()
+    MObject transform;
+    result = flagSelList.getDependNode(0, transform);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    if (!transform.hasFn(MFn::kDependencyNode)) {
+        MGlobal::displayError(&quot;The object specified is not a valid DG node!&quot;);
+        return MStatus::kInvalidParameter;
+    }
+    result = fnNode.setObject(transform);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    if (!fnNode.hasAttribute(CallbackNode::kMSG_CXN_ATTR_NAME)) {
+        MFnMessageAttribute fnMsgAttr;
+        MObject msgAttr = fnMsgAttr.create(CallbackNode::kMSG_CXN_ATTR_NAME,
+                                           CallbackNode::kMSG_CXN_ATTR_NAME,
+                                           &amp;result);
+        CHECK_MSTATUS_AND_RETURN_IT(result);
+        fnNode.addAttribute(msgAttr);
+    }
+    MDGModifier dgModCxn;
+    MPlug msgPlug = fnNode.findPlug(CallbackNode::kMSG_CXN_ATTR_NAME, false, &amp;result);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    result = dgModCxn.connect(msgPlug, callbackNodeMsgPlug);
+    CHECK_MSTATUS_AND_RETURN_IT(result);
+    dgModCxn.doIt();
+</code></pre>
+
+<p>We basically create a new message attribute on the transform node and connect it
+up (using a different <code>MDGModifier</code>, since our internal one is going to be
+reserved for deleting the callback node we created if the user chooses to undo,
+and deleting the node will automatically break the connections anyway)</p>
+<p>We also need to define <code>CallbackNode::kMSG_CXN_ATTR_NAME</code> and 
+<code>CallbackNode::kIN_TRANSFORM_ATTR_NAME</code>, which will be the names of the
+message attributes on the callback and transform nodes respectively. You can do
+that in the respective source files however you like.</p>
+<h2 id="getting-somewhere">Getting somewhere</h2>
+<p>Once all of that is done and your plugin is built, you should be able to run the 
+following MEL script (or similar):</p>
+<pre><code>file -f -newFile;
+unloadPlugin &quot;callbackNodeExample&quot;;
+loadPlugin &quot;c:/Users/sonictk/Git/experiments/maya_node_callback_example/build/Debug/callbackNodeExample.mll&quot;;
+
+createNode &quot;transform&quot;;
+applyCallback -n &quot;transform1&quot;;
+</code></pre>
+
+<p>Which should give you something similar to the following:</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="397pt" height="51pt"
+ viewBox="0.00 0.00 397.00 51.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 47)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-47 393,-47 393,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M12,-0.5C12,-0.5 128,-0.5 128,-0.5 134,-0.5 140,-6.5 140,-12.5 140,-12.5 140,-30.5 140,-30.5 140,-36.5 134,-42.5 128,-42.5 128,-42.5 12,-42.5 12,-42.5 6,-42.5 0,-36.5 0,-30.5 0,-30.5 0,-12.5 0,-12.5 0,-6.5 6,-0.5 12,-0.5"/>
+<text text-anchor="middle" x="70" y="-28.9" font-family="Arial" font-size="12.00">Transform node</text>
+<polyline fill="none" stroke="black" points="0,-21.5 140,-21.5 "/>
+<text text-anchor="middle" x="70" y="-7.9" font-family="Arial" font-size="12.00">callback node msg. attr.</text>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M255,-0.5C255,-0.5 377,-0.5 377,-0.5 383,-0.5 389,-6.5 389,-12.5 389,-12.5 389,-30.5 389,-30.5 389,-36.5 383,-42.5 377,-42.5 377,-42.5 255,-42.5 255,-42.5 249,-42.5 243,-36.5 243,-30.5 243,-30.5 243,-12.5 243,-12.5 243,-6.5 249,-0.5 255,-0.5"/>
+<text text-anchor="middle" x="316" y="-28.9" font-family="Arial" font-size="12.00">Callback node</text>
+<polyline fill="none" stroke="black" points="243,-21.5 389,-21.5 "/>
+<text text-anchor="middle" x="316" y="-7.9" font-family="Arial" font-size="12.00">transform node msg. attr.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="blue" d="M140,-10.5C182.201,-10.5 195.224,-10.5 232.867,-10.5"/>
+<polygon fill="blue" stroke="blue" points="233,-14.0001 243,-10.5 233,-7.0001 233,-14.0001"/>
+<text text-anchor="middle" x="191.5" y="-14.5" font-family="Arial" font-size="10.00">message conn.</text>
+</g>
+</g>
+</svg>
+
+<p>If you're still following along; great! Let's now focus on actually <em>doing</em>
+something useful with the nodes we've made.</p>
+<h3 id="a-more-detailed-overview-of-the-entire-setup">A more detailed overview of the entire setup</h3>
+<p>Now that we've established the relationship between the nodes, let's think about
+what we need to do next. We know that we want to get the <code>translateX</code> value
+from the transform node whenever a user changes it interactively. We also know
+that we don't want this behaviour to be dirty propagation-based (i.e. no
+explicit connection in the graph). </p>
+<p>If you paid attention at all during the stream, you'll know what the answer is:
+it's in the form of Maya's various callback mechanisms. However, before we jump
+right into writing it up, let's think a little again over what we need to do in
+greater detail this time:</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="515pt" height="353pt"
+ viewBox="0.00 0.00 515.00 352.58" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 348.575)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-348.575 511,-348.575 511,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M88,-163.575C88,-163.575 186,-163.575 186,-163.575 192,-163.575 198,-169.575 198,-175.575 198,-175.575 198,-246.575 198,-246.575 198,-252.575 192,-258.575 186,-258.575 186,-258.575 88,-258.575 88,-258.575 82,-258.575 76,-252.575 76,-246.575 76,-246.575 76,-175.575 76,-175.575 76,-169.575 82,-163.575 88,-163.575"/>
+<text text-anchor="middle" x="137" y="-246.575" font-family="Arial" font-size="10.00">Transform node</text>
+<polyline fill="none" stroke="black" points="76,-239.575 198,-239.575 "/>
+<text text-anchor="middle" x="137" y="-227.575" font-family="Arial" font-size="10.00">callback node msg. attr.</text>
+<polyline fill="none" stroke="black" points="76,-220.575 198,-220.575 "/>
+<text text-anchor="middle" x="137" y="-208.575" font-family="Arial" font-size="10.00">translateX</text>
+<polyline fill="none" stroke="black" points="76,-201.575 198,-201.575 "/>
+<text text-anchor="middle" x="137" y="-189.575" font-family="Arial" font-size="10.00">attr. changed callback</text>
+<polyline fill="none" stroke="black" points="76,-182.575 198,-182.575 "/>
+<text text-anchor="middle" x="137" y="-170.575" font-family="Arial" font-size="10.00">translateY/Z</text>
+</g>
+<!-- transform&#45;&gt;transform -->
+<g id="edge4" class="edge"><title>transform:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="green" stroke-dasharray="1,5" d="M122.442,-220.583C74.3658,-246.641 0,-242.632 0,-201.575 0,-163.004 65.6332,-157.131 113.443,-178.166"/>
+<polygon fill="green" stroke="green" points="111.921,-181.318 122.442,-182.567 114.996,-175.03 111.921,-181.318"/>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M393,-268.075C393,-268.075 495,-268.075 495,-268.075 501,-268.075 507,-274.075 507,-280.075 507,-280.075 507,-332.075 507,-332.075 507,-338.075 501,-344.075 495,-344.075 495,-344.075 393,-344.075 393,-344.075 387,-344.075 381,-338.075 381,-332.075 381,-332.075 381,-280.075 381,-280.075 381,-274.075 387,-268.075 393,-268.075"/>
+<text text-anchor="middle" x="444" y="-332.075" font-family="Arial" font-size="10.00">Callback node</text>
+<polyline fill="none" stroke="black" points="381,-325.075 507,-325.075 "/>
+<text text-anchor="middle" x="444" y="-313.075" font-family="Arial" font-size="10.00">transform node msg. attr.</text>
+<polyline fill="none" stroke="black" points="381,-306.075 507,-306.075 "/>
+<text text-anchor="middle" x="444" y="-294.075" font-family="Arial" font-size="10.00">installation callback</text>
+<polyline fill="none" stroke="black" points="381,-287.075 507,-287.075 "/>
+<text text-anchor="middle" x="444" y="-275.075" font-family="Arial" font-size="10.00">callback registry</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="blue" d="M198,-230.075C236.616,-230.075 186.073,-290.672 216,-315.075 270.17,-359.248 304.352,-320.125 370.935,-316.36"/>
+<polygon fill="blue" stroke="blue" points="371.103,-319.857 381,-316.075 370.905,-312.86 371.103,-319.857"/>
+<text text-anchor="middle" x="289.5" y="-337.675" font-family="Arial" font-size="8.00" fill="blue">message conn.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge6" class="edge"><title>transform:f3&#45;&gt;callback:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="5,2" d="M198,-192.075C209.004,-192.075 205.775,-179.141 216,-175.075 276.711,-150.938 312.949,-133.083 363,-175.075 395.098,-202.005 345.545,-264.409 371.089,-275.405"/>
+<polygon fill="grey" stroke="grey" points="370.557,-278.865 381,-277.075 371.721,-271.962 370.557,-278.865"/>
+<text text-anchor="middle" x="289.5" y="-195.675" font-family="Arial" font-size="8.00" fill="grey">callback ID is stored so that </text>
+<text text-anchor="middle" x="289.5" y="-186.675" font-family="Arial" font-size="8.00" fill="grey">it can be un&#45;registered on node </text>
+<text text-anchor="middle" x="289.5" y="-177.675" font-family="Arial" font-size="8.00" fill="grey">deletion/disconnection</text>
+</g>
+<!-- readTranslateXCB -->
+<g id="node3" class="node"><title>readTranslateXCB</title>
+<ellipse fill="none" stroke="black" stroke-dasharray="5,2" cx="444" cy="-50.0753" rx="53.6367" ry="18"/>
+<text text-anchor="middle" x="444" y="-47.5753" font-family="Arial" font-size="10.00">Callback function</text>
+</g>
+<!-- transform&#45;&gt;readTranslateXCB -->
+<g id="edge3" class="edge"><title>transform:f3&#45;&gt;readTranslateXCB</title>
+<path fill="none" stroke="green" d="M198,-192.075C234.011,-192.075 191.138,-139.126 216,-113.075 258.267,-68.7865 328.716,-54.7512 379.938,-50.732"/>
+<polygon fill="green" stroke="green" points="380.494,-54.2025 390.236,-50.0373 380.023,-47.2184 380.494,-54.2025"/>
+<text text-anchor="middle" x="289.5" y="-124.675" font-family="Arial" font-size="8.00" fill="green">2. Calls function when translateX. </text>
+<text text-anchor="middle" x="289.5" y="-115.675" font-family="Arial" font-size="8.00" fill="green">changes interactively on transform node</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="red" stroke-dasharray="5,2" d="M381,-296.075C379.738,-296.075 216.952,-220.903 216,-220.075 208.498,-213.554 209.63,-203.156 206.693,-197.035"/>
+<polygon fill="red" stroke="red" points="208.42,-193.991 198,-192.075 204.952,-200.071 208.42,-193.991"/>
+<text text-anchor="middle" x="289.5" y="-297.675" font-family="Arial" font-size="8.00" fill="red">1. Registers this callback when </text>
+<text text-anchor="middle" x="289.5" y="-288.675" font-family="Arial" font-size="8.00" fill="red">node is created/connected</text>
+</g>
+<!-- readTranslateXCB&#45;&gt;transform -->
+<g id="edge5" class="edge"><title>readTranslateXCB&#45;&gt;transform:f4:s</title>
+<path fill="none" stroke="brown" stroke-dasharray="5,2" d="M414.552,-35.0097C369.194,-13.2565 279.172,20.4465 216,-17.0753 155.86,-52.796 138.595,-85.4793 137.108,-152.009"/>
+<polygon fill="brown" stroke="brown" points="133.608,-152.038 137,-162.075 140.607,-152.113 133.608,-152.038"/>
+<text text-anchor="middle" x="289.5" y="-28.6753" font-family="Arial" font-size="8.00" fill="brown">3. Sets final ty/tz values </text>
+<text text-anchor="middle" x="289.5" y="-19.6753" font-family="Arial" font-size="8.00" fill="brown">on the transform node</text>
+</g>
+</g>
+</svg>
+
+<p>Ok, that's a little confusing. As
+a <a href="https://en.wikipedia.org/wiki/Logic_(musician)">great man</a> 
+once said, let's <a href="https://www.youtube.com/watch?v=UhAml-4uDco">break it down</a>.</p>
+<h3 id="registering-the-callback-onto-the-transform-node">Registering the callback onto the transform node</h3>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="515pt" height="362pt"
+ viewBox="0.00 0.00 515.00 362.03" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 358.031)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-358.031 511,-358.031 511,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M88,-173.031C88,-173.031 186,-173.031 186,-173.031 192,-173.031 198,-179.031 198,-185.031 198,-185.031 198,-256.031 198,-256.031 198,-262.031 192,-268.031 186,-268.031 186,-268.031 88,-268.031 88,-268.031 82,-268.031 76,-262.031 76,-256.031 76,-256.031 76,-185.031 76,-185.031 76,-179.031 82,-173.031 88,-173.031"/>
+<text text-anchor="middle" x="137" y="-256.031" font-family="Arial" font-size="10.00">Transform node</text>
+<polyline fill="none" stroke="black" points="76,-249.031 198,-249.031 "/>
+<text text-anchor="middle" x="137" y="-237.031" font-family="Arial" font-size="10.00">callback node msg. attr.</text>
+<polyline fill="none" stroke="black" points="76,-230.031 198,-230.031 "/>
+<text text-anchor="middle" x="137" y="-218.031" font-family="Arial" font-size="10.00">translateX</text>
+<polyline fill="none" stroke="black" points="76,-211.031 198,-211.031 "/>
+<text text-anchor="middle" x="137" y="-199.031" font-family="Arial" font-size="10.00">attr. changed callback</text>
+<polyline fill="none" stroke="black" points="76,-192.031 198,-192.031 "/>
+<text text-anchor="middle" x="137" y="-180.031" font-family="Arial" font-size="10.00">translateY/Z</text>
+</g>
+<!-- transform&#45;&gt;transform -->
+<g id="edge4" class="edge"><title>transform:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M122.442,-230.039C74.3658,-256.097 0,-252.087 0,-211.031 0,-172.46 65.6332,-166.586 113.443,-187.622"/>
+<polygon fill="grey" stroke="grey" points="111.921,-190.774 122.442,-192.023 114.996,-184.485 111.921,-190.774"/>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M393,-277.531C393,-277.531 495,-277.531 495,-277.531 501,-277.531 507,-283.531 507,-289.531 507,-289.531 507,-341.531 507,-341.531 507,-347.531 501,-353.531 495,-353.531 495,-353.531 393,-353.531 393,-353.531 387,-353.531 381,-347.531 381,-341.531 381,-341.531 381,-289.531 381,-289.531 381,-283.531 387,-277.531 393,-277.531"/>
+<text text-anchor="middle" x="444" y="-341.531" font-family="Arial" font-size="10.00">Callback node</text>
+<polyline fill="none" stroke="black" points="381,-334.531 507,-334.531 "/>
+<text text-anchor="middle" x="444" y="-322.531" font-family="Arial" font-size="10.00">transform node msg. attr.</text>
+<polyline fill="none" stroke="black" points="381,-315.531 507,-315.531 "/>
+<text text-anchor="middle" x="444" y="-303.531" font-family="Arial" font-size="10.00">installation callback</text>
+<polyline fill="none" stroke="black" points="381,-296.531 507,-296.531 "/>
+<text text-anchor="middle" x="444" y="-284.531" font-family="Arial" font-size="10.00">callback registry</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="blue" d="M198,-239.531C236.616,-239.531 186.073,-300.127 216,-324.531 270.17,-368.703 304.352,-329.58 370.935,-325.816"/>
+<polygon fill="blue" stroke="blue" points="371.103,-329.312 381,-325.531 370.905,-322.315 371.103,-329.312"/>
+<text text-anchor="middle" x="289.5" y="-347.131" font-family="Arial" font-size="8.00" fill="blue">message conn.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge6" class="edge"><title>transform:f3&#45;&gt;callback:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-201.531C209.004,-201.531 205.775,-188.596 216,-184.531 276.711,-160.393 312.949,-142.539 363,-184.531 395.098,-211.46 345.545,-273.865 371.089,-284.861"/>
+<polygon fill="grey" stroke="grey" points="370.557,-288.32 381,-286.531 371.721,-281.418 370.557,-288.32"/>
+<text text-anchor="middle" x="289.5" y="-205.131" font-family="Arial" font-size="8.00" fill="grey">callback ID is stored so that </text>
+<text text-anchor="middle" x="289.5" y="-196.131" font-family="Arial" font-size="8.00" fill="grey">it can be un&#45;registered on node </text>
+<text text-anchor="middle" x="289.5" y="-187.131" font-family="Arial" font-size="8.00" fill="grey">deletion/disconnection</text>
+</g>
+<!-- readTranslateXCB -->
+<g id="node3" class="node"><title>readTranslateXCB</title>
+<ellipse fill="none" stroke="black" stroke-dasharray="5,2" cx="444" cy="-50.5308" rx="53.6367" ry="18"/>
+<text text-anchor="middle" x="444" y="-48.0308" font-family="Arial" font-size="10.00">Callback function</text>
+</g>
+<!-- transform&#45;&gt;readTranslateXCB -->
+<g id="edge3" class="edge"><title>transform:f3&#45;&gt;readTranslateXCB</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-201.531C237.921,-201.531 188.762,-142.715 216,-113.531 257.859,-68.6809 328.599,-54.7601 380.004,-50.9214"/>
+<polygon fill="grey" stroke="grey" points="380.256,-54.4125 390.012,-50.2819 379.81,-47.4268 380.256,-54.4125"/>
+<text text-anchor="middle" x="289.5" y="-134.131" font-family="Arial" font-size="8.00" fill="grey">2. Calls function when</text>
+<text text-anchor="middle" x="289.5" y="-125.131" font-family="Arial" font-size="8.00" fill="grey"> &#160;&#160;&#160;translateX. </text>
+<text text-anchor="middle" x="289.5" y="-116.131" font-family="Arial" font-size="8.00" fill="grey">changes interactively on transform node</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M381,-305.531C379.738,-305.531 216.952,-230.358 216,-229.531 208.498,-223.01 209.63,-212.612 206.693,-206.49"/>
+<polygon fill="grey" stroke="grey" points="208.42,-203.446 198,-201.531 204.952,-209.526 208.42,-203.446"/>
+<text text-anchor="middle" x="289.5" y="-307.131" font-family="Arial" font-size="8.00" fill="grey">1. Registers this callback when </text>
+<text text-anchor="middle" x="289.5" y="-298.131" font-family="Arial" font-size="8.00" fill="grey">node is created/connected</text>
+</g>
+<!-- readTranslateXCB&#45;&gt;transform -->
+<g id="edge5" class="edge"><title>readTranslateXCB&#45;&gt;transform:f4:s</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M414.442,-35.282C368.931,-13.2746 278.701,20.7739 216,-17.5308 153.305,-55.8324 138.305,-91.2779 137.084,-161.402"/>
+<polygon fill="grey" stroke="grey" points="133.584,-161.502 137,-171.531 140.583,-161.56 133.584,-161.502"/>
+<text text-anchor="middle" x="289.5" y="-29.1308" font-family="Arial" font-size="8.00" fill="grey">3. Sets final ty/tz values </text>
+<text text-anchor="middle" x="289.5" y="-20.1308" font-family="Arial" font-size="8.00" fill="grey">on the transform node</text>
+</g>
+</g>
+</svg>
+
+<p>We already did the message connection earlier, so we can move on.</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="515pt" height="362pt"
+ viewBox="0.00 0.00 515.00 362.03" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 358.031)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-358.031 511,-358.031 511,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M88,-173.031C88,-173.031 186,-173.031 186,-173.031 192,-173.031 198,-179.031 198,-185.031 198,-185.031 198,-256.031 198,-256.031 198,-262.031 192,-268.031 186,-268.031 186,-268.031 88,-268.031 88,-268.031 82,-268.031 76,-262.031 76,-256.031 76,-256.031 76,-185.031 76,-185.031 76,-179.031 82,-173.031 88,-173.031"/>
+<text text-anchor="middle" x="137" y="-256.031" font-family="Arial" font-size="10.00">Transform node</text>
+<polyline fill="none" stroke="black" points="76,-249.031 198,-249.031 "/>
+<text text-anchor="middle" x="137" y="-237.031" font-family="Arial" font-size="10.00">callback node msg. attr.</text>
+<polyline fill="none" stroke="black" points="76,-230.031 198,-230.031 "/>
+<text text-anchor="middle" x="137" y="-218.031" font-family="Arial" font-size="10.00">translateX</text>
+<polyline fill="none" stroke="black" points="76,-211.031 198,-211.031 "/>
+<text text-anchor="middle" x="137" y="-199.031" font-family="Arial" font-size="10.00">attr. changed callback</text>
+<polyline fill="none" stroke="black" points="76,-192.031 198,-192.031 "/>
+<text text-anchor="middle" x="137" y="-180.031" font-family="Arial" font-size="10.00">translateY/Z</text>
+</g>
+<!-- transform&#45;&gt;transform -->
+<g id="edge4" class="edge"><title>transform:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M122.442,-230.039C74.3658,-256.097 0,-252.087 0,-211.031 0,-172.46 65.6332,-166.586 113.443,-187.622"/>
+<polygon fill="grey" stroke="grey" points="111.921,-190.774 122.442,-192.023 114.996,-184.485 111.921,-190.774"/>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M393,-277.531C393,-277.531 495,-277.531 495,-277.531 501,-277.531 507,-283.531 507,-289.531 507,-289.531 507,-341.531 507,-341.531 507,-347.531 501,-353.531 495,-353.531 495,-353.531 393,-353.531 393,-353.531 387,-353.531 381,-347.531 381,-341.531 381,-341.531 381,-289.531 381,-289.531 381,-283.531 387,-277.531 393,-277.531"/>
+<text text-anchor="middle" x="444" y="-341.531" font-family="Arial" font-size="10.00">Callback node</text>
+<polyline fill="none" stroke="black" points="381,-334.531 507,-334.531 "/>
+<text text-anchor="middle" x="444" y="-322.531" font-family="Arial" font-size="10.00">transform node msg. attr.</text>
+<polyline fill="none" stroke="black" points="381,-315.531 507,-315.531 "/>
+<text text-anchor="middle" x="444" y="-303.531" font-family="Arial" font-size="10.00">installation callback</text>
+<polyline fill="none" stroke="black" points="381,-296.531 507,-296.531 "/>
+<text text-anchor="middle" x="444" y="-284.531" font-family="Arial" font-size="10.00">callback registry</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-239.531C236.616,-239.531 186.073,-300.127 216,-324.531 270.17,-368.703 304.352,-329.58 370.935,-325.816"/>
+<polygon fill="grey" stroke="grey" points="371.103,-329.312 381,-325.531 370.905,-322.315 371.103,-329.312"/>
+<text text-anchor="middle" x="289.5" y="-347.131" font-family="Arial" font-size="8.00" fill="grey">message conn.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge6" class="edge"><title>transform:f3&#45;&gt;callback:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-201.531C209.004,-201.531 205.775,-188.596 216,-184.531 276.711,-160.393 312.949,-142.539 363,-184.531 395.098,-211.46 345.545,-273.865 371.089,-284.861"/>
+<polygon fill="grey" stroke="grey" points="370.557,-288.32 381,-286.531 371.721,-281.418 370.557,-288.32"/>
+<text text-anchor="middle" x="289.5" y="-205.131" font-family="Arial" font-size="8.00" fill="grey">callback ID is stored so that </text>
+<text text-anchor="middle" x="289.5" y="-196.131" font-family="Arial" font-size="8.00" fill="grey">it can be un&#45;registered on node </text>
+<text text-anchor="middle" x="289.5" y="-187.131" font-family="Arial" font-size="8.00" fill="grey">deletion/disconnection</text>
+</g>
+<!-- readTranslateXCB -->
+<g id="node3" class="node"><title>readTranslateXCB</title>
+<ellipse fill="none" stroke="black" stroke-dasharray="5,2" cx="444" cy="-50.5308" rx="53.6367" ry="18"/>
+<text text-anchor="middle" x="444" y="-48.0308" font-family="Arial" font-size="10.00">Callback function</text>
+</g>
+<!-- transform&#45;&gt;readTranslateXCB -->
+<g id="edge3" class="edge"><title>transform:f3&#45;&gt;readTranslateXCB</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-201.531C237.921,-201.531 188.762,-142.715 216,-113.531 257.859,-68.6809 328.599,-54.7601 380.004,-50.9214"/>
+<polygon fill="grey" stroke="grey" points="380.256,-54.4125 390.012,-50.2819 379.81,-47.4268 380.256,-54.4125"/>
+<text text-anchor="middle" x="289.5" y="-134.131" font-family="Arial" font-size="8.00" fill="grey">2. Calls function when</text>
+<text text-anchor="middle" x="289.5" y="-125.131" font-family="Arial" font-size="8.00" fill="grey"> &#160;&#160;&#160;translateX. </text>
+<text text-anchor="middle" x="289.5" y="-116.131" font-family="Arial" font-size="8.00" fill="grey">changes interactively on transform node</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="red" d="M381,-305.531C379.738,-305.531 216.952,-230.358 216,-229.531 208.498,-223.01 209.63,-212.612 206.693,-206.49"/>
+<polygon fill="red" stroke="red" points="208.42,-203.446 198,-201.531 204.952,-209.526 208.42,-203.446"/>
+<text text-anchor="middle" x="289.5" y="-307.131" font-family="Arial" font-size="8.00" fill="red">1. Registers this callback when </text>
+<text text-anchor="middle" x="289.5" y="-298.131" font-family="Arial" font-size="8.00" fill="red">node is created/connected</text>
+</g>
+<!-- readTranslateXCB&#45;&gt;transform -->
+<g id="edge5" class="edge"><title>readTranslateXCB&#45;&gt;transform:f4:s</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M414.442,-35.282C368.931,-13.2746 278.701,20.7739 216,-17.5308 153.305,-55.8324 138.305,-91.2779 137.084,-161.402"/>
+<polygon fill="grey" stroke="grey" points="133.584,-161.502 137,-171.531 140.583,-161.56 133.584,-161.502"/>
+<text text-anchor="middle" x="289.5" y="-29.1308" font-family="Arial" font-size="8.00" fill="grey">3. Sets final ty/tz values </text>
+<text text-anchor="middle" x="289.5" y="-20.1308" font-family="Arial" font-size="8.00" fill="grey">on the transform node</text>
+</g>
+</g>
+</svg>
+
+<p>Let's start here instead. We need to set-up a callback on the callback node when
+it is created that is responsible for <em>setting up another callback on the
+transform node</em> in order to watch for any attribute changes on it. We can do
+this by making use of the <code>MPxNode::postConstructor</code> virtual method, like so:</p>
+<pre><code class="c++">
+void CallbackNode::postConstructor()
+{
+    MStatus status;
+    MObject thisNode = thisMObject();
+
+    MCallbackId installId = MNodeMessage::addAttributeChangedCallback(thisNode,
+                                                                      installCallback,
+                                                                      NULL,
+                                                                      &amp;status);
+    if (status != MStatus::kSuccess) {
+        MGlobal::displayError(&quot;Unable to install example feature!&quot;);
+        uninstallCallback();
+        return;
+    }
+    callbacks.append(installId);
+    MNodeMessage::addNodePreRemovalCallback(thisNode,
+                                            uninstallCallback,
+                                            NULL,
+                                            &amp;status);
+    if (status != MStatus::kSuccess) {
+        MGlobal::displayError(&quot;Unable to install example feature!&quot;);
+        uninstallCallback();
+        return;
+    }
+}
+
+</code></pre>
+
+<p>What are <code>installCallback</code> and <code>uninstallCallback</code>, you ask? Let's take a
+look at the documentation for both <code>MNodeMessage::addAttributeChangedCallback</code>
+and <code>MNodeMessage::addNodePreRemovalCallback</code> to get some hints:</p>
+<pre><code class="c++">MCallbackId addAttributeChangedCallback(MObject &amp;node, 
+                                        MNodeMessage::MAttr2PlugFunction func, 
+                                        void *clientData = NULL, 
+                                        MStatus *ReturnStatus = NULL)
+
+MCallbackId addNodePreRemovalCallback(MObject &amp;node, 
+                                      MMessage::MNodeFunction func, 
+                                      void *clientData = NULL, 
+                                      MStatus *ReturnStatus = NULL)
+</code></pre>
+
+<p>So basically our <code>installCallback</code> and <code>uninstallCallback</code> functions need to
+match the signatures of a <code>MAttr2PlugFunction</code> and a <code>MNodeFunction</code>,
+whatever those might be. Looking at an <code>MAttr2PlugFunction</code> signature gives
+the following:</p>
+<pre><code class="c++">
+typedef void(* MAttr2PlugFunction) (MNodeMessage::AttributeMessage msg, 
+                                    MPlug &amp;plug, 
+                                    MPlug &amp;otherPlug, 
+                                    void *clientData)
+
+</code></pre>
+
+<p>Basically a function pointer that takes two <code>MPlugs</code>. And a <code>MNodeFunction</code>?</p>
+<pre><code class="c++">
+typedef void(* MNodeFunction) (MObject &amp;node, void *clientData)
+
+</code></pre>
+
+<p>Yep, a function pointer that takes a <code>MObject</code> node. Not terribly complicated,
+which is always good.</p>
+<p>Knowing this, we can go ahead and starting writing our callback functions:</p>
+<pre><code class="c++">
+MStatus uninstallCallback()
+{
+    MStatus status = MMessage::removeCallbacks(CallbackNode::callbacks);
+    MGlobal::displayInfo(&quot;Removed feature!&quot;);
+    return status;
+}
+
+
+void uninstallCallback(MObject &amp;node, void *data)
+{
+    uninstallCallback();
+}
+
+
+void installCallback(MNodeMessage::AttributeMessage msg,
+                     MPlug &amp;plug,
+                     MPlug &amp;otherPlug,
+                     void *data)
+{
+    if (msg == (MNodeMessage::kConnectionBroken|
+                MNodeMessage::kIncomingDirection|
+                MNodeMessage::kOtherPlugSet)) {
+        uninstallCallback();
+    }
+    if (msg != (MNodeMessage::kConnectionMade|
+                MNodeMessage::kIncomingDirection|
+                MNodeMessage::kOtherPlugSet)) {
+        return;
+    }
+    // NOTE: (sonictk) We check if the node has its message connection connected
+    // first to determine if we should install the real callback onto that node
+    MObject callbackNode = plug.node();
+    MFnDependencyNode fnNode(callbackNode);
+    MPlug cxnPlug = fnNode.findPlug(CallbackNode::kIN_TRANSFORM_ATTR_NAME);
+    MPlugArray connectedPlugs;
+    cxnPlug.connectedTo(connectedPlugs, true, false);
+    if (connectedPlugs.length() != 1) {
+        return;
+    }
+    MObject transformNode = connectedPlugs[0].node();
+    if (!transformNode.hasFn(MFn::kTransform)) {
+        return;
+    }
+    // NOTE: (sonictk) Install the callback onto the other node and add it to the
+    // registry of callbacks to track
+    MStatus status;
+    MCallbackId featureCallbackId = MNodeMessage::addAttributeChangedCallback(transformNode,
+                                                                              featureCallback,
+                                                                              NULL,
+                                                                              &amp;status);
+    if (status != MStatus::kSuccess) {
+        return;
+    }
+    CallbackNode::callbacks.append(featureCallbackId);
+    MGlobal::displayInfo(&quot;Feature installed!&quot;);
+
+}
+
+</code></pre>
+
+<p>Basically, we check the message type that Maya passes us to see if we care about
+the type of event that just occurred, and either remove the callbacks from a
+global registry that the node maintains if we detect a disconnection, or install
+a new callback onto the transform node otherwise. Yes, this means we also need
+to define what this "global callback registry" is:</p>
+<pre><code class="c++">static MCallbackIdArray callbacks;
+</code></pre>
+
+<p>That's it. No need to over-complicate matters. (Remember, in a STU build, any
+variable with <code>static</code> storage duration is effectively global!)</p>
+<p>We'll implement <code>featureCallback</code> in a little bit. For now, let's look at what
+our overview looks like now:</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="515pt" height="362pt"
+ viewBox="0.00 0.00 515.00 362.03" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 358.031)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-358.031 511,-358.031 511,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M88,-173.031C88,-173.031 186,-173.031 186,-173.031 192,-173.031 198,-179.031 198,-185.031 198,-185.031 198,-256.031 198,-256.031 198,-262.031 192,-268.031 186,-268.031 186,-268.031 88,-268.031 88,-268.031 82,-268.031 76,-262.031 76,-256.031 76,-256.031 76,-185.031 76,-185.031 76,-179.031 82,-173.031 88,-173.031"/>
+<text text-anchor="middle" x="137" y="-256.031" font-family="Arial" font-size="10.00">Transform node</text>
+<polyline fill="none" stroke="black" points="76,-249.031 198,-249.031 "/>
+<text text-anchor="middle" x="137" y="-237.031" font-family="Arial" font-size="10.00">callback node msg. attr.</text>
+<polyline fill="none" stroke="black" points="76,-230.031 198,-230.031 "/>
+<text text-anchor="middle" x="137" y="-218.031" font-family="Arial" font-size="10.00">translateX</text>
+<polyline fill="none" stroke="black" points="76,-211.031 198,-211.031 "/>
+<text text-anchor="middle" x="137" y="-199.031" font-family="Arial" font-size="10.00">attr. changed callback</text>
+<polyline fill="none" stroke="black" points="76,-192.031 198,-192.031 "/>
+<text text-anchor="middle" x="137" y="-180.031" font-family="Arial" font-size="10.00">translateY/Z</text>
+</g>
+<!-- transform&#45;&gt;transform -->
+<g id="edge4" class="edge"><title>transform:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M122.442,-230.039C74.3658,-256.097 0,-252.087 0,-211.031 0,-172.46 65.6332,-166.586 113.443,-187.622"/>
+<polygon fill="grey" stroke="grey" points="111.921,-190.774 122.442,-192.023 114.996,-184.485 111.921,-190.774"/>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M393,-277.531C393,-277.531 495,-277.531 495,-277.531 501,-277.531 507,-283.531 507,-289.531 507,-289.531 507,-341.531 507,-341.531 507,-347.531 501,-353.531 495,-353.531 495,-353.531 393,-353.531 393,-353.531 387,-353.531 381,-347.531 381,-341.531 381,-341.531 381,-289.531 381,-289.531 381,-283.531 387,-277.531 393,-277.531"/>
+<text text-anchor="middle" x="444" y="-341.531" font-family="Arial" font-size="10.00">Callback node</text>
+<polyline fill="none" stroke="black" points="381,-334.531 507,-334.531 "/>
+<text text-anchor="middle" x="444" y="-322.531" font-family="Arial" font-size="10.00">transform node msg. attr.</text>
+<polyline fill="none" stroke="black" points="381,-315.531 507,-315.531 "/>
+<text text-anchor="middle" x="444" y="-303.531" font-family="Arial" font-size="10.00">installation callback</text>
+<polyline fill="none" stroke="black" points="381,-296.531 507,-296.531 "/>
+<text text-anchor="middle" x="444" y="-284.531" font-family="Arial" font-size="10.00">callback registry</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-239.531C232.712,-239.531 189.437,-293.185 216,-315.531 269.585,-360.609 304.176,-328.841 370.914,-325.764"/>
+<polygon fill="grey" stroke="grey" points="371.084,-329.261 381,-325.531 370.922,-322.263 371.084,-329.261"/>
+<text text-anchor="middle" x="289.5" y="-341.131" font-family="Arial" font-size="8.00" fill="grey">message conn.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge6" class="edge"><title>transform:f3&#45;&gt;callback:f3</title>
+<path fill="none" stroke="green" d="M198,-201.531C209.004,-201.531 205.775,-188.596 216,-184.531 276.711,-160.393 312.949,-142.539 363,-184.531 395.098,-211.46 345.545,-273.865 371.089,-284.861"/>
+<polygon fill="green" stroke="green" points="370.557,-288.32 381,-286.531 371.721,-281.418 370.557,-288.32"/>
+<text text-anchor="middle" x="289.5" y="-205.131" font-family="Arial" font-size="8.00" fill="green">callback ID is stored so that </text>
+<text text-anchor="middle" x="289.5" y="-196.131" font-family="Arial" font-size="8.00" fill="green">it can be un&#45;registered on node </text>
+<text text-anchor="middle" x="289.5" y="-187.131" font-family="Arial" font-size="8.00" fill="green">deletion/disconnection</text>
+</g>
+<!-- readTranslateXCB -->
+<g id="node3" class="node"><title>readTranslateXCB</title>
+<ellipse fill="none" stroke="black" stroke-dasharray="5,2" cx="444" cy="-50.5308" rx="53.6367" ry="18"/>
+<text text-anchor="middle" x="444" y="-48.0308" font-family="Arial" font-size="10.00">Callback function</text>
+</g>
+<!-- transform&#45;&gt;readTranslateXCB -->
+<g id="edge3" class="edge"><title>transform:f3&#45;&gt;readTranslateXCB</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M198,-201.531C237.921,-201.531 188.762,-142.715 216,-113.531 257.859,-68.6809 328.599,-54.7601 380.004,-50.9214"/>
+<polygon fill="grey" stroke="grey" points="380.256,-54.4125 390.012,-50.2819 379.81,-47.4268 380.256,-54.4125"/>
+<text text-anchor="middle" x="289.5" y="-134.131" font-family="Arial" font-size="8.00" fill="grey">2. Calls function when</text>
+<text text-anchor="middle" x="289.5" y="-125.131" font-family="Arial" font-size="8.00" fill="grey"> &#160;&#160;&#160;translateX. </text>
+<text text-anchor="middle" x="289.5" y="-116.131" font-family="Arial" font-size="8.00" fill="grey">changes interactively on transform node</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="red" d="M381,-305.531C300.261,-305.531 276.936,-282.498 216,-229.531 208.498,-223.01 209.63,-212.612 206.693,-206.49"/>
+<polygon fill="red" stroke="red" points="208.42,-203.446 198,-201.531 204.952,-209.526 208.42,-203.446"/>
+<text text-anchor="middle" x="289.5" y="-307.131" font-family="Arial" font-size="8.00" fill="red">1. Done!</text>
+</g>
+<!-- readTranslateXCB&#45;&gt;transform -->
+<g id="edge5" class="edge"><title>readTranslateXCB&#45;&gt;transform:f4:s</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M414.442,-35.282C368.931,-13.2746 278.701,20.7739 216,-17.5308 153.305,-55.8324 138.305,-91.2779 137.084,-161.402"/>
+<polygon fill="grey" stroke="grey" points="133.584,-161.502 137,-171.531 140.583,-161.56 133.584,-161.502"/>
+<text text-anchor="middle" x="289.5" y="-29.1308" font-family="Arial" font-size="8.00" fill="grey">3. Sets final ty/tz values </text>
+<text text-anchor="middle" x="289.5" y="-20.1308" font-family="Arial" font-size="8.00" fill="grey">on the transform node</text>
+</g>
+</g>
+</svg>
+
+<p>Yes, we did skip a little ahead, but it was all for a good cause. Let's go ahead
+and implement that <code>featureCallback</code> now to read the <code>translateX</code> value off
+of the transform node.</p>
+<pre><code class="c++">
+void featureCallback(MNodeMessage::AttributeMessage msg,
+                     MPlug &amp;plug,
+                     MPlug &amp;otherPlug,
+                     void *data)
+{
+    if (msg != (MNodeMessage::kAttributeSet|MNodeMessage::kIncomingDirection)) {
+        return;
+    }
+    const char *plugName = plug.partialName(0,0,0,0,0,1).asChar();
+    if (strstr(&quot;translateX&quot;, plugName) == NULL) {
+        return;
+    }
+    double xVal = plug.asDouble();
+}
+</code></pre>
+
+<p>As we can see, it's very similar in theory to how we implemented
+<code>installCallback</code>; the difference here being that we look for a different type
+of event (<code>kAttributeSet</code> instead), and we just get the value of the
+translateX plug without doing anything else.</p>
+<p>So just like that, our overview looks like this:</p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.38.0 (20140413.2041)
+ -->
+<!-- Title: callbackNodeExample Pages: 1 -->
+<svg width="515pt" height="324pt"
+ viewBox="0.00 0.00 515.00 324.35" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 320.345)">
+<title>callbackNodeExample</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-320.345 511,-320.345 511,4 -4,4"/>
+<!-- transform -->
+<g id="node1" class="node"><title>transform</title>
+<path fill="none" stroke="black" d="M88,-153.345C88,-153.345 186,-153.345 186,-153.345 192,-153.345 198,-159.345 198,-165.345 198,-165.345 198,-236.345 198,-236.345 198,-242.345 192,-248.345 186,-248.345 186,-248.345 88,-248.345 88,-248.345 82,-248.345 76,-242.345 76,-236.345 76,-236.345 76,-165.345 76,-165.345 76,-159.345 82,-153.345 88,-153.345"/>
+<text text-anchor="middle" x="137" y="-236.345" font-family="Arial" font-size="10.00">Transform node</text>
+<polyline fill="none" stroke="black" points="76,-229.345 198,-229.345 "/>
+<text text-anchor="middle" x="137" y="-217.345" font-family="Arial" font-size="10.00">callback node msg. attr.</text>
+<polyline fill="none" stroke="black" points="76,-210.345 198,-210.345 "/>
+<text text-anchor="middle" x="137" y="-198.345" font-family="Arial" font-size="10.00">translateX</text>
+<polyline fill="none" stroke="black" points="76,-191.345 198,-191.345 "/>
+<text text-anchor="middle" x="137" y="-179.345" font-family="Arial" font-size="10.00">attr. changed callback</text>
+<polyline fill="none" stroke="black" points="76,-172.345 198,-172.345 "/>
+<text text-anchor="middle" x="137" y="-160.345" font-family="Arial" font-size="10.00">translateY/Z</text>
+</g>
+<!-- transform&#45;&gt;transform -->
+<g id="edge4" class="edge"><title>transform:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="green" d="M122.442,-210.353C74.3658,-236.411 0,-232.402 0,-191.345 0,-152.774 65.6332,-146.9 113.443,-167.936"/>
+<polygon fill="green" stroke="green" points="111.921,-171.088 122.442,-172.337 114.996,-164.8 111.921,-171.088"/>
+</g>
+<!-- callback -->
+<g id="node2" class="node"><title>callback</title>
+<path fill="none" stroke="black" d="M393,-239.845C393,-239.845 495,-239.845 495,-239.845 501,-239.845 507,-245.845 507,-251.845 507,-251.845 507,-303.845 507,-303.845 507,-309.845 501,-315.845 495,-315.845 495,-315.845 393,-315.845 393,-315.845 387,-315.845 381,-309.845 381,-303.845 381,-303.845 381,-251.845 381,-251.845 381,-245.845 387,-239.845 393,-239.845"/>
+<text text-anchor="middle" x="444" y="-303.845" font-family="Arial" font-size="10.00">Callback node</text>
+<polyline fill="none" stroke="black" points="381,-296.845 507,-296.845 "/>
+<text text-anchor="middle" x="444" y="-284.845" font-family="Arial" font-size="10.00">transform node msg. attr.</text>
+<polyline fill="none" stroke="black" points="381,-277.845 507,-277.845 "/>
+<text text-anchor="middle" x="444" y="-265.845" font-family="Arial" font-size="10.00">installation callback</text>
+<polyline fill="none" stroke="black" points="381,-258.845 507,-258.845 "/>
+<text text-anchor="middle" x="444" y="-246.845" font-family="Arial" font-size="10.00">callback registry</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge1" class="edge"><title>transform:f1&#45;&gt;callback:f1</title>
+<path fill="none" stroke="blue" d="M198,-219.845C224.991,-219.845 194.764,-261.186 216,-277.845 271.094,-321.065 304.317,-290.982 370.924,-288.066"/>
+<polygon fill="blue" stroke="blue" points="371.079,-291.564 381,-287.845 370.926,-284.565 371.079,-291.564"/>
+<text text-anchor="middle" x="289.5" y="-303.445" font-family="Arial" font-size="8.00" fill="blue">message conn.</text>
+</g>
+<!-- transform&#45;&gt;callback -->
+<g id="edge6" class="edge"><title>transform:f3&#45;&gt;callback:f3</title>
+<path fill="none" stroke="green" d="M198,-181.845C271.335,-181.845 304.856,-138.155 363,-182.845 383.34,-198.479 360.525,-234.717 371.162,-245.66"/>
+<polygon fill="green" stroke="green" points="370.408,-249.094 381,-248.845 372.565,-242.435 370.408,-249.094"/>
+<text text-anchor="middle" x="289.5" y="-185.445" font-family="Arial" font-size="8.00" fill="green">done!</text>
+</g>
+<!-- readTranslateXCB -->
+<g id="node3" class="node"><title>readTranslateXCB</title>
+<ellipse fill="none" stroke="black" stroke-dasharray="5,2" cx="444" cy="-39.8452" rx="53.6367" ry="18"/>
+<text text-anchor="middle" x="444" y="-37.3452" font-family="Arial" font-size="10.00">Callback function</text>
+</g>
+<!-- transform&#45;&gt;readTranslateXCB -->
+<g id="edge3" class="edge"><title>transform:f3&#45;&gt;readTranslateXCB</title>
+<path fill="none" stroke="green" d="M198,-181.845C224.143,-181.845 197.993,-144.798 216,-125.845 260.222,-79.3011 332.201,-57.6975 383.239,-47.8334"/>
+<polygon fill="green" stroke="green" points="383.95,-51.2615 393.154,-46.0132 382.686,-44.3766 383.95,-51.2615"/>
+<text text-anchor="middle" x="289.5" y="-137.445" font-family="Arial" font-size="8.00" fill="green">2. Calls function when translateX. </text>
+<text text-anchor="middle" x="289.5" y="-128.445" font-family="Arial" font-size="8.00" fill="green">changes interactively on transform node</text>
+</g>
+<!-- callback&#45;&gt;transform -->
+<g id="edge2" class="edge"><title>callback:f2&#45;&gt;transform:f3</title>
+<path fill="none" stroke="red" d="M381,-267.845C300.261,-267.845 288.007,-228.365 216,-191.845 212.174,-189.905 209.991,-187.586 207.808,-185.67"/>
+<polygon fill="red" stroke="red" points="208.588,-182.218 198,-181.845 206.045,-188.74 208.588,-182.218"/>
+<text text-anchor="middle" x="289.5" y="-269.445" font-family="Arial" font-size="8.00" fill="red">1. Done!</text>
+</g>
+<!-- readTranslateXCB&#45;&gt;transform -->
+<g id="edge5" class="edge"><title>readTranslateXCB&#45;&gt;transform:f4:s</title>
+<path fill="none" stroke="grey" stroke-dasharray="1,5" d="M410.835,-25.6809C364.485,-7.59065 277.711,17.4103 216,-17.8452 159.019,-50.3983 139.033,-79.5957 137.15,-141.606"/>
+<polygon fill="grey" stroke="grey" points="133.647,-141.795 137,-151.845 140.646,-141.897 133.647,-141.795"/>
+<text text-anchor="middle" x="289.5" y="-29.4452" font-family="Arial" font-size="8.00" fill="grey">3. Sets final ty/tz values </text>
+<text text-anchor="middle" x="289.5" y="-20.4452" font-family="Arial" font-size="8.00" fill="grey">on the transform node</text>
+</g>
+</g>
+</svg>
+
+<p>Fast, wasn't it?</p>
+<p>Now that we're reading the values, we can focus on step 3: setting new values
+back onto the transform node.</p>
+<h3 id="getting-our-spiral-behavior-working">Getting our spiral behavior working</h3>
+<p>If you have any background in high school maths at all, you probably know what
+comes next:</p>
+<pre><code class="c++">void featureCallback(MNodeMessage::AttributeMessage msg,
+                     MPlug &amp;plug,
+                     MPlug &amp;otherPlug,
+                     void *data)
+{
+    if (msg != (MNodeMessage::kAttributeSet|MNodeMessage::kIncomingDirection)) {
+        return;
+    }
+    const char *plugName = plug.partialName(0,0,0,0,0,1).asChar();
+    if (strstr(&quot;translateX&quot;, plugName) == NULL) {
+        return;
+    }
+    MStatus status;
+    MPlug transformPlug = plug.parent(&amp;status);
+    if (status != MStatus::kSuccess) {
+        return;
+    }
+    double xVal = plug.asDouble();
+    MPlug transformYPlug = transformPlug.child(1, &amp;status);
+    if (status != MStatus::kSuccess) {
+        return;
+    }
+    MPlug transformZPlug = transformPlug.child(2, &amp;status);
+    if (status != MStatus::kSuccess) {
+        return;
+    }
+    double newYVal = sin(xVal);
+    double newZVal = cos(transformZPlug.asDouble() + xVal);
+    transformYPlug.setDouble(newYVal);
+    transformZPlug.setDouble(newZVal);
+}
+</code></pre>
+
+<p>That's right, simple trigonometry functions!</p>
+<p>And just like that, we're done!</p>
+<p>...Kind of. There's just a bit of cleanup to do: in the <code>uninitializePlugin</code>
+function we wrote earlier, we need to make sure that we call
+<code>uninstallCallback()</code> as well to remove all the callbacks from the global
+registry (since we don't want those to persist if we remove the callback node
+from the scene).</p>
+<pre><code class="c++">
+MStatus uninitializePlugin(MObject obj)
+{
+    MFnPlugin plugin(obj);
+    MStatus status;
+    uninstallCallback();
+    status =  plugin.deregisterNode(CallbackNode::kNODE_ID);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    status = plugin.deregisterCommand(ApplyCallbackCommand::kCOMMAND_NAME);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    return status;
+}
+
+</code></pre>
+
+<p>Ok, <em>now</em> we're done.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>Is this the right solution for everything? No, absolutely not. This method is
+best used for installable features onto a rig where you can control the entire
+behaviour of the feature within a single set of depedency nodes that you
+control. You also need to take care that you do not trigger unnecessary DG
+evaluations within your callback methods that could potentially cause cycles in
+the DG (which won't be caught by Maya!)</p>
+<p>However, this method will work far better than using <code>scriptNodes</code>, since they
+will work even when referenced, thus making them far better suited to
+production. You also are able to reason about the current callbacks that have
+been registered far more easily than if you had been using script nodes and
+managing which ones were registered to which namespace/object combinations in
+the scene.</p>
+<p>Use with a healthy dose of caution and wonder, as always!</p></div>
+        
+    </div>
+
+    <footer class="col-md-12 text-center">
+        <hr>
+        <p>
+        <small>Documentation built with <a href="http://www.mkdocs.org/">MkDocs</a>.</p></small>
+    </footer>
+
+    <script src="../js/jquery-1.10.2.min.js"></script>
+    <script src="../js/bootstrap-3.0.3.min.js"></script>
+    <script src="../js/highlight.pack.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+    <script>
+    var base_url = '..';
+    </script>
+    <script data-main="../mkdocs/js/search.js" src="../mkdocs/js/require.js"></script>
+    <script src="../js/base.js"></script>
+
+    <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span aria-hidden="true">&times;</span>
+                        <span class="sr-only">Close</span>
+                    </button>
+                    <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        From here you can search these documents. Enter your search terms below.
+                    </p>
+                    <form role="form">
+                        <div class="form-group">
+                            <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query">
+                        </div>
+                    </form>
+                    <div id="mkdocs-search-results"></div>
+                </div>
+                <div class="modal-footer">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </body>
+
+</html>
