@@ -11,7 +11,8 @@ basic; in this case, creating a spiral motion when a user moves the transform
 node in the scene that we set up the feature for.
 
 For more information on this approach to setting up scene features, please refer
-to *Raffaele Fragapane's* [Cult Of Rig](http:// www.cultofrig.com/2017/07/22/pilot-season-day-16-automatically-loading-callbacks-scene-load/) 
+to *Raffaele Fragapane's* [Cult Of Rig](http://www.cultofrig.com/2017/07/22/
+pilot-season-day-16-automatically-loading-callbacks-scene-load/) 
 series on the reasoning behind this approach. 
 
 ### Why not just do what Raffaele does and use a ``scriptNode``?
