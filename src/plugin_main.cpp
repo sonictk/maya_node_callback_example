@@ -30,14 +30,13 @@ MStatus initializePlugin(MObject obj)
 MStatus uninitializePlugin(MObject obj)
 {
 	MFnPlugin plugin(obj);
-
 	MStatus status;
+	uninstallCallback();
 	status =  plugin.deregisterNode(CallbackNode::kNODE_ID);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
 	status = plugin.deregisterCommand(ApplyCallbackCommand::kCOMMAND_NAME);
 	CHECK_MSTATUS_AND_RETURN_IT(status);
 
-	uninstallCallback();
 	return status;
 }
