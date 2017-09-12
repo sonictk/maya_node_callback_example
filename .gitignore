@@ -376,5 +376,3 @@ GTAGS
 *.el
 *.clang_complete
 
-# Ignore mkdocs documentation
-site/
