@@ -376,3 +376,5 @@ GTAGS
 *.el
 *.clang_complete
 
+# mkdocs
+site/
