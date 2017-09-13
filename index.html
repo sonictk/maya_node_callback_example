@@ -71,9 +71,11 @@
         <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
     <ul class="nav bs-sidenav">
     
-        <li class="first-level active"><a href="#tutorial">Tutorial</a></li>
+        <li class="first-level active"><a href="#tutorial-on-how-to-write-a-install-able-maya-node">Tutorial on how to write a install-able Maya node</a></li>
         
             <li class="second-level"><a href="#about">About</a></li>
+            
+                <li class="third-level"><a href="#what-exactly-is-this-approach">What exactly is this approach?</a></li>
             
                 <li class="third-level"><a href="#why-not-just-do-what-raffaele-does-and-use-a-scriptnode">Why not just do what Raffaele does and use a scriptNode?</a></li>
             
@@ -104,12 +106,15 @@
             <li class="second-level"><a href="#conclusion">Conclusion</a></li>
             
         
+            <li class="second-level"><a href="#credits">Credits</a></li>
+            
+        
     
     </ul>
 </div></div>
         <div class="col-md-9" role="main">
 
-<h1 id="tutorial">Tutorial</h1>
+<h1 id="tutorial-on-how-to-write-a-install-able-maya-node">Tutorial on how to write a install-able Maya node</h1>
 <h2 id="about">About</h2>
 <p>This is a tutorial on how to write a node that sets up features in your Maya
 scene without having explicit dirty propagation relationships in the dependency graph.</p>
@@ -117,10 +122,33 @@ scene without having explicit dirty propagation relationships in the dependency 
 itself, and thus the actual functionality will be restricted to something very
 basic; in this case, creating a spiral motion when a user moves the transform
 node in the scene that we set up the feature for.</p>
-<p>For more information on this approach to setting up scene features, please refer
-to <em>Raffaele Fragapane's</em> <a href="http://www.cultofrig.com/2017/07/22/
+<p>All the source code for this example node is available <a href="https://github.com/sonictk/maya_node_callback_example">here</a>.</p>
+<h3 id="what-exactly-is-this-approach">What exactly is this approach?</h3>
+<p>You know how you "normally" do an IK/FK switch in a rig by having 2 joint chains, 
+constrain them both to a 3rd joint chain, and then have a bunch of connections in 
+the Node Editor tied to some custom attribute on some transform node to blend the 
+constraints? </p>
+<p>Think about it for a second: rather than having this "feature" be built into the
+dependency graph of the rig itself, why not have it be able to be set up
+<em>on-demand</em>? There is no <em>reason</em> that this feature needs to stay in the rig,
+which creates all sorts of complications when you switch between the IK/FK
+chains and affect the dependency graph unnecessarily. In short, <strong>there's no
+need to store this feature as a fixed state in the dependency graph.</strong></p>
+<p>By utilizing the callback mechanism of Maya, we can avoid having to "bake" this
+features/state into the rig, and setup our desired rig behaviours completely
+independently of what the rig's graph might actually have, at runtime. We can
+also un-install this feature as well, <em>all without affecting the original
+graph</em>. This philosophy makes it tremendously easy to reason about components of
+the rig independently. (Very much like traditional software development!)</p>
+<p>Now, it's important to note that not all problems lend themselves well to this 
+approach; particularly, problems that are <em>stateful</em> (i.e. are tied to time,
+velocity, etc.). Those problems tend to require a little more careful thought in
+order to determine their suitability towards such an approach.</p>
+<p>For more information on this approach to installing scene features on-demand,
+please refer to <em>Raffaele Fragapane's</em> <a href="http://www.cultofrig.com/2017/07/22/
 pilot-season-day-16-automatically-loading-callbacks-scene-load/">Cult Of Rig</a> 
-series on the reasoning behind this approach. </p>
+series on the thought process behind this approach. He goes over it in a lot
+more detail.</p>
 <h3 id="why-not-just-do-what-raffaele-does-and-use-a-scriptnode">Why not just do what Raffaele does and use a <code>scriptNode</code>?</h3>
 <p>The reason we're using a compiled node here instead of a <code>scriptNode</code> as he
 details in the original approach is due to the fact that the script executed
@@ -292,7 +320,7 @@ think about what we want this node to do at a high-level:</p>
 </g>
 </svg>
 
-<p>Ok. So we know that we want to our node read the translate information from the 
+<p>Ok. So we know that we want our node to read the translate information from the 
 transform node. However, I just promised that we wouldn't have explicit
 connections between our nodes in the DG. So what we'll do instead is use
 <em>message attributes</em> to do the job of making sure our nodes know about each
@@ -368,7 +396,9 @@ public:
 };
 </code></pre>
 
-<p>And <code>apply_callback_command.cpp</code>:</p>
+<p>Let's go over method-by-method of how to implement each of these in 
+<code>apply_callback_command.cpp</code>:</p>
+<p>First, let's define some of the constants we'll be using:</p>
 <pre><code class="c++">
 const char *flagSelListLongName = &quot;-node&quot;;
 const char *flagSelListShortName = &quot;-n&quot;;
@@ -384,14 +414,22 @@ const char *helpText = &quot;This command will setup a callback on a given node.
 
 const MString ApplyCallbackCommand::kCOMMAND_NAME = &quot;applyCallback&quot;;
 
+</code></pre>
 
+<p>The creator function will basically return a new instance of the command.</p>
+<pre><code class="c++">
 void *ApplyCallbackCommand::creator()
 {
     return new ApplyCallbackCommand();
 }
 
+</code></pre>
 
-MSyntax ApplyCallbackCommand::newSyntax()
+<p>The <code>newSyntax()</code> function is one we define ourselves, and it's what sets up the 
+actual parameters that the command will accept in Maya. We'll also implement <code>parseArgs()</code>
+to actually take the arguments we give to the command and figure out if we're 
+just calling it with a help flag, or if we're actually passing an object in.</p>
+<pre><code class="c++">MSyntax ApplyCallbackCommand::newSyntax()
 {
     MSyntax syntax;
     syntax.addFlag(flagHelpShortName, flagHelpLongName);
@@ -425,7 +463,13 @@ MStatus ApplyCallbackCommand::parseArgs(const MArgList &amp;args)
     return result;
 }
 
+</code></pre>
 
+<p>The <code>doIt</code> and <code>redoIt</code> functions are where the meat of the command happens; 
+<code>doIt</code> basically calls <code>redoIt</code> (so that redos actually work correctly!). We 
+create a new callback node, along with checking if the transform node passed into 
+the command is valid.</p>
+<pre><code class="c++">
 MStatus ApplyCallbackCommand::doIt(const MArgList &amp;args)
 {
     setCommandString(ApplyCallbackCommand::kCOMMAND_NAME);
@@ -477,7 +521,11 @@ MStatus ApplyCallbackCommand::redoIt()
     return result;
 }
 
+</code></pre>
 
+<p>As for <code>isUndoable()</code>, we just basically tell Maya that this command is undo-able, 
+and implement the functionality in <code>undoIt()</code> by deleting the node.</p>
+<pre><code class="c++">
 MStatus ApplyCallbackCommand::undoIt()
 {
     dgMod.undoIt();
@@ -538,6 +586,34 @@ and deleting the node will automatically break the connections anyway)</p>
 <code>CallbackNode::kIN_TRANSFORM_ATTR_NAME</code>, which will be the names of the
 message attributes on the callback and transform nodes respectively. You can do
 that in the respective source files however you like.</p>
+<p>Finally, we should also probably register/de-register this command so that we can
+actually use it proper:</p>
+<pre><code class="c++">
+MStatus initializePlugin(MObject obj)
+{
+    // ...previous stuff
+
+    status = plugin.registerCommand(ApplyCallbackCommand::kCOMMAND_NAME,
+                                    ApplyCallbackCommand::creator,
+                                    ApplyCallbackCommand::newSyntax);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    return status;
+}
+
+
+MStatus uninitializePlugin(MObject obj)
+{
+    // ...again, more previous stuff
+
+    status = plugin.deregisterCommand(ApplyCallbackCommand::kCOMMAND_NAME);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    return status;
+}
+
+</code></pre>
+
 <h2 id="getting-somewhere">Getting somewhere</h2>
 <p>Once all of that is done and your plugin is built, you should be able to run the 
 following MEL script (or similar):</p>
@@ -919,7 +995,12 @@ typedef void(* MNodeFunction) (MObject &amp;node, void *clientData)
 
 <p>Yep, a function pointer that takes a <code>MObject</code> node. Not terribly complicated,
 which is always good.</p>
-<p>Knowing this, we can go ahead and starting writing our callback functions:</p>
+<p>Knowing this, we can go ahead and starting writing our callback functions. The
+first will be <code>uninstallCallback</code>, which basically just un-registers all the
+callbacks that currently exist in the <em>callback registry</em> (We'll worry about
+this in a bit). We have an overloaded version that returns nothing, and takes an
+<code>MObject&amp;</code> along with some arbitrary data in order to match the function
+pointer signature detailed above.</p>
 <pre><code class="c++">
 MStatus uninstallCallback()
 {
@@ -934,7 +1015,11 @@ void uninstallCallback(MObject &amp;node, void *data)
     uninstallCallback();
 }
 
+</code></pre>
 
+<p>With that done, we can then go ahead and implement the callback that handles installation 
+of the callback onto the transform node itself.</p>
+<pre><code class="c++">
 void installCallback(MNodeMessage::AttributeMessage msg,
                      MPlug &amp;plug,
                      MPlug &amp;otherPlug,
@@ -1258,7 +1343,15 @@ production. You also are able to reason about the current callbacks that have
 been registered far more easily than if you had been using script nodes and
 managing which ones were registered to which namespace/object combinations in
 the scene.</p>
-<p>Use with a healthy dose of caution and wonder, as always!</p></div>
+<p>Use with a healthy dose of caution and wonder, as always!</p>
+<h2 id="credits">Credits</h2>
+<p><strong><a href="http://www.cultofrig.com/">Raffaele Fragapane</a></strong>: For the idea regarding this 
+in the first place, and for being an awesome smart dude.</p>
+<p><strong><a href="https://github.com/yantor3d">Ryan Porter</a></strong>: For discussing/confirming with me
+the limitations of the Maya <code>scriptNode</code> and for bugging me to write this up in
+the first place.</p>
+<p><strong>Siew Yi Liang</strong>: Duh, I wrote these words and the example code here. You can find 
+more of my ramblings <a href="http://www.sonictk.com/blog">here</a>.</p></div>
         
     </div>
 
@@ -1311,5 +1404,5 @@ the scene.</p>
 
 <!--
 MkDocs version : 0.16.0
-Build Date UTC : 2017-09-12 15:58:39
+Build Date UTC : 2017-09-13 05:43:30
 -->
