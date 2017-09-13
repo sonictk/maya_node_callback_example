@@ -1,4 +1,4 @@
-# Tutorial #
+# Tutorial on how to write a install-able Maya node #
 
 ## About ##
 
@@ -10,10 +10,39 @@ itself, and thus the actual functionality will be restricted to something very
 basic; in this case, creating a spiral motion when a user moves the transform
 node in the scene that we set up the feature for.
 
-For more information on this approach to setting up scene features, please refer
-to *Raffaele Fragapane's* [Cult Of Rig](http://www.cultofrig.com/2017/07/22/
+All the source code for this example node is available [here](https://github.com/sonictk/maya_node_callback_example).
+
+### What exactly is this approach?
+
+You know how you "normally" do an IK/FK switch in a rig by having 2 joint chains, 
+constrain them both to a 3rd joint chain, and then have a bunch of connections in 
+the Node Editor tied to some custom attribute on some transform node to blend the 
+constraints? 
+
+Think about it for a second: rather than having this "feature" be built into the
+dependency graph of the rig itself, why not have it be able to be set up
+*on-demand*? There is no *reason* that this feature needs to stay in the rig,
+which creates all sorts of complications when you switch between the IK/FK
+chains and affect the dependency graph unnecessarily. In short, **there's no
+need to store this feature as a fixed state in the dependency graph.**
+
+By utilizing the callback mechanism of Maya, we can avoid having to "bake" this
+features/state into the rig, and setup our desired rig behaviours completely
+independently of what the rig's graph might actually have, at runtime. We can
+also un-install this feature as well, *all without affecting the original
+graph*. This philosophy makes it tremendously easy to reason about components of
+the rig independently. (Very much like traditional software development!)
+
+Now, it's important to note that not all problems lend themselves well to this 
+approach; particularly, problems that are *stateful* (i.e. are tied to time,
+velocity, etc.). Those problems tend to require a little more careful thought in
+order to determine their suitability towards such an approach.
+
+For more information on this approach to installing scene features on-demand,
+please refer to *Raffaele Fragapane's* [Cult Of Rig](http://www.cultofrig.com/2017/07/22/
 pilot-season-day-16-automatically-loading-callbacks-scene-load/) 
-series on the reasoning behind this approach. 
+series on the thought process behind this approach. He goes over it in a lot
+more detail.
 
 ### Why not just do what Raffaele does and use a ``scriptNode``?
 
@@ -188,7 +217,7 @@ digraph callbackNodeExample {
 
 %}
 
-Ok. So we know that we want to our node read the translate information from the 
+Ok. So we know that we want our node to read the translate information from the 
 transform node. However, I just promised that we wouldn't have explicit
 connections between our nodes in the DG. So what we'll do instead is use
 *message attributes* to do the job of making sure our nodes know about each
@@ -274,7 +303,10 @@ public:
 };
 ```
 
-And ``apply_callback_command.cpp``:
+Let's go over method-by-method of how to implement each of these in 
+``apply_callback_command.cpp``:
+
+First, let's define some of the constants we'll be using:
 
 ```c++
 
@@ -292,13 +324,25 @@ const char *helpText = "This command will setup a callback on a given node.\n"
 
 const MString ApplyCallbackCommand::kCOMMAND_NAME = "applyCallback";
 
+```
+
+The creator function will basically return a new instance of the command.
+
+```c++
 
 void *ApplyCallbackCommand::creator()
 {
     return new ApplyCallbackCommand();
 }
 
+```
 
+The ``newSyntax()`` function is one we define ourselves, and it's what sets up the 
+actual parameters that the command will accept in Maya. We'll also implement ``parseArgs()``
+to actually take the arguments we give to the command and figure out if we're 
+just calling it with a help flag, or if we're actually passing an object in.
+
+```c++
 MSyntax ApplyCallbackCommand::newSyntax()
 {
     MSyntax syntax;
@@ -333,6 +377,14 @@ MStatus ApplyCallbackCommand::parseArgs(const MArgList &args)
     return result;
 }
 
+```
+
+The ``doIt`` and ``redoIt`` functions are where the meat of the command happens; 
+``doIt`` basically calls ``redoIt`` (so that redos actually work correctly!). We 
+create a new callback node, along with checking if the transform node passed into 
+the command is valid.
+
+```c++
 
 MStatus ApplyCallbackCommand::doIt(const MArgList &args)
 {
@@ -385,6 +437,12 @@ MStatus ApplyCallbackCommand::redoIt()
     return result;
 }
 
+```
+
+As for ``isUndoable()``, we just basically tell Maya that this command is undo-able, 
+and implement the functionality in ``undoIt()`` by deleting the node.
+
+```c++
 
 MStatus ApplyCallbackCommand::undoIt()
 {
@@ -452,6 +510,35 @@ We also need to define ``CallbackNode::kMSG_CXN_ATTR_NAME`` and
 message attributes on the callback and transform nodes respectively. You can do
 that in the respective source files however you like.
 
+Finally, we should also probably register/de-register this command so that we can
+actually use it proper:
+
+```c++
+
+MStatus initializePlugin(MObject obj)
+{
+    // ...previous stuff
+
+	status = plugin.registerCommand(ApplyCallbackCommand::kCOMMAND_NAME,
+									ApplyCallbackCommand::creator,
+									ApplyCallbackCommand::newSyntax);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	return status;
+}
+
+
+MStatus uninitializePlugin(MObject obj)
+{
+    // ...again, more previous stuff
+
+	status = plugin.deregisterCommand(ApplyCallbackCommand::kCOMMAND_NAME);
+	CHECK_MSTATUS_AND_RETURN_IT(status);
+
+	return status;
+}
+
+```
 
 ## Getting somewhere ##
 
@@ -641,7 +728,12 @@ typedef void(* MNodeFunction) (MObject &node, void *clientData)
 Yep, a function pointer that takes a ``MObject`` node. Not terribly complicated,
 which is always good.
 
-Knowing this, we can go ahead and starting writing our callback functions:
+Knowing this, we can go ahead and starting writing our callback functions. The
+first will be ``uninstallCallback``, which basically just un-registers all the
+callbacks that currently exist in the *callback registry* (We'll worry about
+this in a bit). We have an overloaded version that returns nothing, and takes an
+``MObject&`` along with some arbitrary data in order to match the function
+pointer signature detailed above.
 
 ```c++
 
@@ -658,6 +750,12 @@ void uninstallCallback(MObject &node, void *data)
     uninstallCallback();
 }
 
+```
+
+With that done, we can then go ahead and implement the callback that handles installation 
+of the callback onto the transform node itself.
+
+```c++
 
 void installCallback(MNodeMessage::AttributeMessage msg,
                      MPlug &plug,
@@ -879,3 +977,16 @@ managing which ones were registered to which namespace/object combinations in
 the scene.
 
 Use with a healthy dose of caution and wonder, as always!
+
+
+## Credits ##
+
+**[Raffaele Fragapane](http://www.cultofrig.com/)**: For the idea regarding this 
+in the first place, and for being an awesome smart dude.
+
+**[Ryan Porter](https://github.com/yantor3d)**: For discussing/confirming with me
+the limitations of the Maya ``scriptNode`` and for bugging me to write this up in
+the first place.
+
+**Siew Yi Liang**: Duh, I wrote these words and the example code here. You can find 
+more of my ramblings [here](http://www.sonictk.com/blog).
